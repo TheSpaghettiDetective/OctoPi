@@ -1,0 +1,353 @@
+#!/usr/bin/env bash
+# OctoPI generation script
+# Helper script that runs in a Raspbian chroot to create the OctoPI distro
+# Written by Guy Sheffer <guysoft at gmail dot com> and Gina Häußge <osd@foosel.net>
+# GPL V3
+########
+set -x
+set -e
+
+export LC_ALL=C
+
+source /common.sh
+
+if [ -n "$OCTOPI_APTMIRROR" ];
+then
+    echo "Switching apt mirror in /etc/apt/sources.list to $OCTOPI_APTMIRROR"
+    cp /etc/apt/sources.list /etc/apt/sources.list.backup
+    sed -i "s@http://raspbian.raspberrypi.org/raspbian/@$OCTOPI_APTMIRROR@g" /etc/apt/sources.list
+fi
+
+WEBCAM_USER=webcam
+FFMPEG_HLS_COMMIT=c6fdbe26ef30fff817581e5ed6e078d96111248a
+FFMPEG_HLS_DIR=/opt/ffmpeg-hls
+
+### Script ####
+
+unpack /filesystem/home/pi /home/"${BASE_USER}" "${BASE_USER}"
+unpack /filesystem/home/root /root root
+unpack /filesystem/boot /boot
+
+apt-get update
+
+******
+# in case we are building from a regular raspbian image instead of the lite one...
+remove_extra=$(remove_if_installed scratch squeak-plugins-scratch squeak-vm wolfram-engine python-minecraftpi minecraft-pi sonic-pi oracle-java8-jdk bluej libreoffice-common libreoffice-core freepats greenfoot nodered)
+echo "removing:" $remove_extra
+apt-get remove -y --purge  $remove_extra
+apt-get autoremove -y
+
+apt-get -y --force-yes install python3 python3-virtualenv python3-dev git screen subversion cmake cmake-data avahi-daemon libavahi-compat-libdnssd1 libffi-dev libssl-dev libatlas3-base unzip
+
+echo " - Reinstall iputils-ping"
+apt-get install --reinstall iputils-ping
+
+pushd /home/"${BASE_USER}"
+
+  # build virtualenv
+  sudo -u "${BASE_USER}" python3 -m virtualenv --python=python3 oprint
+  sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install --upgrade pip
+
+  # OctoPrint
+  if [ "$OCTOPI_INCLUDE_OCTOPRINT" == "yes" ]
+  then
+    echo "--- Installing OctoPrint"
+    PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install $OCTOPI_OCTOPRINT_PACKAGE
+    PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install https://github.com/TheSpaghettiDetective/OctoPrint-Obico/archive/refs/heads/master.zip
+  fi
+
+  #mjpg-streamer
+  if [ "$OCTOPI_INCLUDE_MJPGSTREAMER" == "yes" ]
+  then
+    install_dir=/opt/mjpg-streamer
+    echo "--- Installing mjpg-streamer to $install_dir"
+    if [ "${BASE_DISTRO}" == "ubuntu" ]; then
+      apt-get -y --allow-downgrades --allow-remove-essential --allow-change-held-packages install libjpeg8-dev
+    else
+      if [ $( is_in_apt libjpeg62-turbo-dev ) -eq 1 ]; then
+        apt-get -y --force-yes install libjpeg62-turbo-dev
+      elif [ $( is_in_apt libjpeg8-dev ) -eq 1 ]; then
+        apt-get -y --force-yes install libjpeg8-dev
+      fi
+    fi
+
+    apt-get -y --force-yes --no-install-recommends install imagemagick ffmpeg libv4l-dev
+
+    wget $OCTOPI_MJPGSTREAMER_ARCHIVE -O mjpg-streamer.zip
+    unzip mjpg-streamer.zip
+    rm mjpg-streamer.zip
+
+    pushd mjpg-streamer-master/mjpg-streamer-experimental
+      # As said in Makefile, it is just a wrapper around CMake.
+      # To apply -j option, we have to unwrap it.
+      build_dir=_build
+      mkdir -p $build_dir
+      pushd $build_dir
+        cmake -DCMAKE_BUILD_TYPE=Release ..
+      popd
+
+      make -j $(nproc) -C $build_dir
+
+      mkdir -p $install_dir
+
+      install -m 755 $build_dir/mjpg_streamer $install_dir
+      find $build_dir -name "*.so" -type f -exec install -m 644 {} $install_dir \;
+
+      # copy bundled web folder
+      cp -a -r ./www $install_dir
+      chmod 755 $install_dir/www
+      chmod -R 644 $install_dir/www
+
+      # create our custom web folder and add a minimal index.html to it
+      mkdir $install_dir/www-octopi
+      pushd $install_dir/www-octopi
+        cat <<EOT >> index.html
+<html>
+<head><title>mjpg_streamer test page</title></head>
+<body>
+<h1>Snapshot</h1>
+<p>Refresh the page to refresh the snapshot</p>
+<img src="./?action=snapshot" alt="Snapshot">
+<h1>Stream</h1>
+<img src="./?action=stream" alt="Stream">
+</body>
+</html>
+EOT
+      popd
+    popd
+    rm -rf mjpg-streamer-master
+
+    # symlink for backwards compatibility
+    sudo -u "${BASE_USER}" ln -s $install_dir /home/"${BASE_USER}"/mjpg-streamer
+  fi
+
+  *****
+
+  # FFMPEG HLS
+  if [ "$OCTOPI_INCLUDE_FFMPEG_HLS" == "yes" ]
+  then
+    apt-get install -y --force-yes --no-install-recommends nginx
+
+    ARCH=arm
+    if [ "${BASE_ARCH}" == "aarch64" ]; then
+        ARCH=aarch64
+    fi
+
+    FFMPEG_BUILD_DIR=$(mktemp -d)
+    pushd ${FFMPEG_BUILD_DIR}
+      FFMPEG_ARCHIVE=ffmpeg.tar.gz
+      wget https://api.github.com/repos/FFmpeg/FFmpeg/tarball/${FFMPEG_COMMIT} -O ${FFMPEG_ARCHIVE}
+      tar xvzf ${FFMPEG_ARCHIVE}
+      cd FFmpeg*
+      ./configure \
+        --arch="${ARCH}" \
+        --disable-doc \
+        --disable-htmlpages \
+        --disable-manpages \
+        --disable-podpages \
+        --disable-txtpages \
+        --disable-ffplay \
+        --disable-ffprobe
+      make -j$(nproc)
+      mkdir -p ${FFMPEG_HLS_DIR}
+      copy_and_export ffmpeg-hls-"${ARCH}" ffmpeg "${FFMPEG_HLS_DIR}"
+    popd
+    rm -r ${FFMPEG_BUILD_DIR}
+
+    useradd ${WEBCAM_USER}
+    usermod -aG video ${WEBCAM_USER}
+  fi
+
+  #CuraEngine
+  if [ "$OCTOPI_INCLUDE_CURAENGINE" == "yes" ]
+  then
+    echo "--- Installing CuraEngine"
+    folder=CuraEngine-$OCTOPI_CURAENGINE_VERSION
+    zipfile=$folder.zip
+    apt-get -y install gcc-4.9 g++-4.9
+    sudo -u "${BASE_USER}" wget -O$zipfile $OCTOPI_CURAENGINE_ARCHIVE
+    sudo -u "${BASE_USER}" unzip $zipfile
+    pushd $folder
+      sudo -u "${BASE_USER}" make -j$(nproc) CXX=g++-4.9 VERSION=$OCTOPI_CURAENGINE_VERSION
+      cp build/CuraEngine /usr/local/bin/cura_engine
+    popd
+    sudo -u "${BASE_USER}" rm -r $folder $zipfile
+  fi
+
+  #setup haproxy for http and https, and webcam
+  if [ "$OCTOPI_INCLUDE_HAPROXY" == "yes" ]
+  then
+    echo "--- Installing haproxy"
+    apt-get -y --force-yes install ssl-cert haproxy
+    rm /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem
+  fi
+
+  # fetch current yq build and install to /usr/local/bin
+  wget -O yq $OCTOPI_YQ_DOWNLOAD && chmod +x yq && mv yq /usr/local/bin
+
+popd
+
+#Make sure user pi / ${BASE_USER} has access to serial ports
+usermod -a -G tty "${BASE_USER}"
+usermod -a -G dialout "${BASE_USER}"
+
+# If building against Ubuntu, make sure vcgencmd is available and pi has the rights to use it
+if [ "${BASE_DISTRO}" == "ubuntu" ]; then
+  apt-get -y --force-yes install libraspberrypi-bin
+  usermod -a -G video "${BASE_USER}"
+fi
+
+# store octopi commit used to build this image
+echo "$OCTOPI_COMMIT" > /etc/octopi_commit
+
+# Keep legacy compatibility
+ln -s /etc/custompios_buildbase /etc/octopi_buildbase
+
+# allow pi / ${BASE_USER} user to run shutdown and service commands
+echo "${BASE_USER} ALL=NOPASSWD: /sbin/shutdown" > /etc/sudoers.d/octoprint-shutdown
+echo "${BASE_USER} ALL=NOPASSWD: /usr/sbin/service" > /etc/sudoers.d/octoprint-service
+
+#make sure users don't run git with sudo, thus breaking permissions, by adding /root/bin to the
+#default sudo path and placing a git wrapper script there that checks if it's run as root
+sed -i "s@secure_path=\"@secure_path=\"/root/bin:@g" /etc/sudoers
+chmod +x /root/bin/git
+
+# add some "How To" info to boot output
+# Note, this code is also in /filesystem/home/pi/scripts/
+sed -i 's@exit 0@@' /etc/rc.local
+cat <<'EOT' >> /etc/rc.local
+
+echo
+echo "------------------------------------------------------------"
+echo
+echo "You may now open a web browser on your local network and "
+echo "navigate to any of the following addresses to access "
+echo "OctoPrint:"
+echo
+for name in $_NAME;
+do
+    echo " http://$name.local"
+done
+
+for ip in $(hostname -I);
+do
+    echo "    http://$ip"
+done
+
+echo
+echo "https is also available, with a self-signed certificate."
+echo
+echo "------------------------------------------------------------"
+echo
+EOT
+
+echo 'exit 0' >> /etc/rc.local
+
+# add a longer welcome text to ~pi/.bashrc / ~${BASE_USER}/.bashrc
+echo "source /home/${BASE_USER}/scripts/welcome" >> /home/${BASE_USER}/.bashrc
+
+#unpack root in the end, so etc file are not overwritten, might need to add two roots int he future
+unpack /filesystem/root /
+
+#####################################################################
+### setup services
+
+### Disable GUI at start
+systemctl_if_exists disable lightdm.service || true
+
+update-rc.d change_password defaults
+update-rc.d change_hostname defaults
+
+
+### OctoPrint
+
+if [ "$OCTOPI_INCLUDE_OCTOPRINT" == "yes" ]
+then
+  systemctl_if_exists enable octoprint.service
+else
+  # let's remove the configs for system services we don't need
+  rm /etc/systemd/system/octoprint.service
+fi
+
+### haproxy
+
+if [ "$OCTOPI_INCLUDE_HAPROXY" == "yes" ]
+then
+  systemctl_if_exists enable gencert.service
+
+  haproxy_version=$(dpkg -s haproxy | grep '^Version:' | awk '{print $2}')
+  if [[ $haproxy_version = 2.* ]]; then
+    mv /etc/haproxy/haproxy.2.x.cfg /etc/haproxy/haproxy.cfg
+    rm /etc/haproxy/haproxy.1.x.cfg
+  else
+    mv /etc/haproxy/haproxy.1.x.cfg /etc/haproxy/haproxy.cfg
+    rm /etc/haproxy/haproxy.2.x.cfg
+  fi
+else
+  # let's remove the configs for system services we don't need
+  rm /etc/systemd/system/gencert.service
+
+  # also we need to make OctoPrint bind to all interfaces because otherwise
+  # it will be unaccessible...
+  [ -f /etc/systemd/system/octoprint.service ] && sed -i "s@HOST=127.0.0.1@HOST=0.0.0.0@" /etc/systemd/system/octoprint.service
+fi
+
+### CuraEngine
+
+if [ ! "$OCTOPI_INCLUDE_CURAENGINE" == "yes" ]
+then
+  # unconfigure the cura engine path in octoprint's config.yaml
+  sudo -u "${BASE_USER}" sed -i -e "s@cura_engine: /usr/local/bin/cura_engine@cura_engine:@g" /home/"${BASE_USER}"/.octoprint/config.yaml
+fi
+
+### Streamer select service.
+
+systemctl_if_exists enable streamer_select.service
+
+### mjpg_streamer
+
+if [ "$OCTOPI_INCLUDE_MJPGSTREAMER" == "yes" ]
+then
+  systemctl_if_exists enable webcamd.service
+### use legacy camera stack on bullseye for now
+  if grep "camera_auto_detect=1" /boot/config.txt
+    then
+        sed -i "s/camera_auto_detect=1/camera_auto_detect=0/g" /boot/config.txt
+    fi
+else
+  rm /etc/logrotate.d/webcamd
+  rm /etc/systemd/system/webcamd.service
+  rm /root/bin/webcamd
+fi
+
+### HLS streamer
+
+systemctl_if_exists enable ffmpeg_hls.service
+
+### Network monitoring
+
+systemctl_if_exists enable networkcheck.timer
+
+### Firmare flashing
+
+echo "--- Installing avrdude"
+apt-get -y install avrdude
+
+### User-fixing
+# Users can change their username easily via the Raspberry Pi imager, which breaks some of OctoPi's scripts
+# we need to install virtualenv-tools3, so let's get pip and that
+apt install -y python3-pip
+sudo -u pi pip3 install --user virtualenv-tools3
+
+systemctl_if_exists enable user-fix.service
+
+
+#cleanup
+apt-get clean
+apt-get autoremove -y
+
+if [ -n "$OCTOPI_APTMIRROR" ];
+then
+    echo "Reverting /etc/apt/sources.list"
+    mv /etc/apt/sources.list.backup /etc/apt/sources.list
+fi
