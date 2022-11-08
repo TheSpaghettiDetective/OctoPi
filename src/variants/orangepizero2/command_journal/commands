@@ -65,3 +65,9 @@ cat <<EOT >> index.html
 EOT
 cd /home/"${BASE_USER}"
 rm -rf mjpg-streamer-master
+
+# scp ../filesystem/root/etc/systemd/system/webcamd.service to /etc/systemd/system/webcamd.service
+
+mkdir /root/bin
+# scp ../filesystem/root/bin/webcamd to /root/bin/webcamd
+systemctl enable webcamd.service
