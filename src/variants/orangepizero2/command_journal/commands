@@ -3,6 +3,9 @@ BASE_USER=pi
 password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
 useradd -m -p "${password}" -s /bin/bash "${BASE_USER}"
 usermod -a -G sudo "${BASE_USER}"
+#Make sure user pi / ${BASE_USER} has access to serial ports
+usermod -a -G tty "${BASE_USER}"
+usermod -a -G dialout "${BASE_USER}"
 
 # vi /etc/ssh/sshd_config
 # Change "PermitRootLogin yes" to "PermitRootLogin no"
@@ -15,11 +18,14 @@ cd /home/"${BASE_USER}"
 sudo -u "${BASE_USER}" python3 -m virtualenv --python=python3 oprint
 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install --upgrade pip
 
+### Install and setup OctoPrint
 OCTOPI_OCTOPRINT_PACKAGE="OctoPrint"
 echo "--- Installing OctoPrint"
 PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install $OCTOPI_OCTOPRINT_PACKAGE
 PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install https://github.com/TheSpaghettiDetective/OctoPrint-Obico/archive/refs/heads/master.zip
 
+# scp ../filesystem/root/etc/systemd/system/octoprint.service to /etc/systemd/system/octoprint.service
+systemctl enable octoprint.service
 
 apt-get -y --force-yes install libjpeg62-turbo-dev
 apt-get -y --force-yes --no-install-recommends install imagemagick ffmpeg libv4l-dev
@@ -67,7 +73,19 @@ cd /home/"${BASE_USER}"
 rm -rf mjpg-streamer-master
 
 # scp ../filesystem/root/etc/systemd/system/webcamd.service to /etc/systemd/system/webcamd.service
-
 mkdir /root/bin
 # scp ../filesystem/root/bin/webcamd to /root/bin/webcamd
+systemctl enable webcamd.service
+
+### Haproxy
+echo "--- Installing haproxy"
+apt-get -y --force-yes install ssl-cert haproxy
+# scp ../filesystem/root/etc/haproxy/haproxy.2.x.cfg to /etc/haproxy/haproxy.cfg
+# scp ../filesystem/root/etc/haproxy/errors to /etc/haproxy/errors
+
+rm /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem
+
+# scp ../filesystem/root/etc/systemd/system/gencert.service to /etc/systemd/system/gencert.service
+mkdir /root/bin
+# scp ../filesystem/root/bin/gencert to /root/bin/gencert
 systemctl enable webcamd.service
