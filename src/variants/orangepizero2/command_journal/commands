@@ -1,0 +1,67 @@
+BASE_USER_PASSWORD=orange
+BASE_USER=pi
+password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
+useradd -m -p "${password}" -s /bin/bash "${BASE_USER}"
+usermod -a -G sudo "${BASE_USER}"
+
+# vi /etc/ssh/sshd_config
+# Change "PermitRootLogin yes" to "PermitRootLogin no"
+
+apt-get -y --force-yes install python3 python3-virtualenv python3-dev git screen subversion cmake cmake-data avahi-daemon libavahi-compat-libdnssd1 libffi-dev libssl-dev libatlas3-base unzip
+echo " - Reinstall iputils-ping"
+apt-get install --reinstall iputils-ping
+
+cd /home/"${BASE_USER}"
+sudo -u "${BASE_USER}" python3 -m virtualenv --python=python3 oprint
+sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install --upgrade pip
+
+OCTOPI_OCTOPRINT_PACKAGE="OctoPrint"
+echo "--- Installing OctoPrint"
+PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install $OCTOPI_OCTOPRINT_PACKAGE
+PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install https://github.com/TheSpaghettiDetective/OctoPrint-Obico/archive/refs/heads/master.zip
+
+
+apt-get -y --force-yes install libjpeg62-turbo-dev
+apt-get -y --force-yes --no-install-recommends install imagemagick ffmpeg libv4l-dev
+OCTOPI_MJPGSTREAMER_ARCHIVE=https://github.com/jacksonliam/mjpg-streamer/archive/master.zip
+wget $OCTOPI_MJPGSTREAMER_ARCHIVE -O mjpg-streamer.zip
+unzip mjpg-streamer.zip
+rm mjpg-streamer.zip
+cd mjpg-streamer-master/mjpg-streamer-experimental
+# As said in Makefile, it is just a wrapper around CMake.
+# To apply -j option, we have to unwrap it.
+build_dir=_build
+mkdir -p $build_dir
+pushd $build_dir
+  cmake -DCMAKE_BUILD_TYPE=Release ..
+popd
+
+make -j $(nproc) -C $build_dir
+
+install_dir=/opt/mjpg-streamer
+mkdir -p $install_dir
+install -m 755 $build_dir/mjpg_streamer $install_dir
+find $build_dir -name "*.so" -type f -exec install -m 644 {} $install_dir \;
+
+# copy bundled web folder
+cp -a -r ./www $install_dir
+chmod 755 $install_dir/www
+chmod -R 644 $install_dir/www
+
+# create our custom web folder and add a minimal index.html to it
+mkdir $install_dir/www-octopi
+cd $install_dir/www-octopi
+cat <<EOT >> index.html
+<html>
+<head><title>mjpg_streamer test page</title></head>
+<body>
+<h1>Snapshot</h1>
+<p>Refresh the page to refresh the snapshot</p>
+<img src="./?action=snapshot" alt="Snapshot">
+<h1>Stream</h1>
+<img src="./?action=stream" alt="Stream">
+</body>
+</html>
+EOT
+cd /home/"${BASE_USER}"
+rm -rf mjpg-streamer-master
