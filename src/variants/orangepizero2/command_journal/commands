@@ -90,6 +90,10 @@ mkdir /root/bin
 # scp ../filesystem/root/bin/gencert to /root/bin/gencert
 systemctl enable webcamd.service
 
+### logrotatd
+# scp ../filesystem/root/etc/logrorate.d to /etc/haproxy/logrorate.d
+
 
 #### Run as pi user
 # scp ../filesystem/home/pi/.octoprint/config.yaml to /home/pi/.octoprint/config.yaml
+# scp ../filesystem/home/pi/.octoprint/webcamd.txt to /home/pi/.octoprint/webcamd.txt
