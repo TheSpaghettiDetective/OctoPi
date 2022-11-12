@@ -89,3 +89,7 @@ rm /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem
 mkdir /root/bin
 # scp ../filesystem/root/bin/gencert to /root/bin/gencert
 systemctl enable webcamd.service
+
+
+#### Run as pi user
+# scp ../filesystem/home/pi/.octoprint/config.yaml to /home/pi/.octoprint/config.yaml
