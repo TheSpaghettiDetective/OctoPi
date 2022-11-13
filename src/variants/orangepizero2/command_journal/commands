@@ -1,3 +1,7 @@
+# From image: Armbian_22.11.0-trunk_Orangepizero2_bullseye_legacy_4.9.255.img.gz
+
+# run armbian-config to change the hostname to orangepi
+#
 BASE_USER_PASSWORD=orange
 BASE_USER=pi
 password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
@@ -23,6 +27,7 @@ OCTOPI_OCTOPRINT_PACKAGE="OctoPrint"
 echo "--- Installing OctoPrint"
 PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install $OCTOPI_OCTOPRINT_PACKAGE
 PIP_DEFAULT_TIMEOUT=60 sudo -u "${BASE_USER}" /home/"${BASE_USER}"/oprint/bin/pip install https://github.com/TheSpaghettiDetective/OctoPrint-Obico/archive/refs/heads/master.zip
+sudo -u "${BASE_USER}" mkdir /home/"${BASE_USER}"/.octoprint
 
 # scp ../filesystem/root/etc/systemd/system/octoprint.service to /etc/systemd/system/octoprint.service
 systemctl enable octoprint.service
@@ -81,19 +86,19 @@ systemctl enable webcamd.service
 echo "--- Installing haproxy"
 apt-get -y --force-yes install ssl-cert haproxy
 # scp ../filesystem/root/etc/haproxy/haproxy.2.x.cfg to /etc/haproxy/haproxy.cfg
-# scp ../filesystem/root/etc/haproxy/errors to /etc/haproxy/errors
+# scp ../filesystem/root/etc/haproxy/errors to /etc/haproxy/
 
 rm /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem
 
 # scp ../filesystem/root/etc/systemd/system/gencert.service to /etc/systemd/system/gencert.service
 mkdir /root/bin
 # scp ../filesystem/root/bin/gencert to /root/bin/gencert
-systemctl enable webcamd.service
+systemctl enable gencert.service
 
 ### logrotatd
-# scp ../filesystem/root/etc/logrorate.d to /etc/haproxy/logrorate.d
+# scp -r ../filesystem/root/etc/logrotate.d to /etc/
 
 
 #### Run as pi user
 # scp ../filesystem/home/pi/.octoprint/config.yaml to /home/pi/.octoprint/config.yaml
-# scp ../filesystem/home/pi/.octoprint/webcamd.txt to /home/pi/.octoprint/webcamd.txt
+# scp ../filesystem/home/pi/webcamd.txt to /home/pi/webcamd.txt
