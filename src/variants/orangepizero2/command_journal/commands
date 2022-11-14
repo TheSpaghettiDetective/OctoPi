@@ -11,6 +11,10 @@ usermod -a -G sudo "${BASE_USER}"
 usermod -a -G tty "${BASE_USER}"
 usermod -a -G dialout "${BASE_USER}"
 
+# allow pi / ${BASE_USER} user to run shutdown and service commands
+echo "${BASE_USER} ALL=NOPASSWD: /sbin/shutdown" > /etc/sudoers.d/octoprint-shutdown
+echo "${BASE_USER} ALL=NOPASSWD: /usr/sbin/service" > /etc/sudoers.d/octoprint-service
+
 # vi /etc/ssh/sshd_config
 # Change "PermitRootLogin yes" to "PermitRootLogin no"
 
