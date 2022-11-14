@@ -99,6 +99,14 @@ systemctl enable gencert.service
 # scp -r ../filesystem/root/etc/logrotate.d to /etc/
 
 
+### Resize on initial boot
+systemctl enable armbian-resize-filesystem
+
+### Run armbian-config to change hostname to orangepi
+
 #### Run as pi user
 # scp ../filesystem/home/pi/.octoprint/config.yaml to /home/pi/.octoprint/config.yaml
 # scp ../filesystem/home/pi/webcamd.txt to /home/pi/webcamd.txt
+
+
+
