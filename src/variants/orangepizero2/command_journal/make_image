@@ -1,0 +1,49 @@
+https://www.golinuxcloud.com/extend-resize-primary-partition-non-lvm-linux/
+
+1. Insert SD card into a Pi.
+
+2. lsblk to find out the dev name of the SD card, e.g., /dev/sda
+
+3. `e2fsck -f /dev/sda1`
+
+4. `resize2fs /dev/sda1 4G` # May make it smaller
+
+The last line of the output will be:
+
+The filesystem on /dev/sda1 is now 1048576 (4k) blocks long.
+
+This means the new file system size is 1048576 x 4k. The number 1048576 depends on the size, and needs to be used in step 6.
+
+5. Use `parted` to shrink partition: `parted /dev/sda`
+
+u <---- Change unit
+s <---- Unit as 512 bytes
+p <---- Partition table
+
+Will see something like:
+
+Number  Start   End        Size       Type     File system  Flags
+ 1      40960s  30408704s  30367745s  primary  ext4
+
+6. Calcuate the "End"
+
+Because each 4k block in step 4 is 8x 512 block. Hence:
+
+End = Start + 1048576*8 = 40960 + 1048576*8 = 8429568
+
+7. Recreate the partition
+
+rm 1 <---- Delete partition 1
+mkpart <---- Make partition
+primary <----- Primary partition
+ext4 <------ File system type
+40960s <----- Start block. The same as the Start in step 5
+8429568s <----- End block. The number calculated in step 6
+p  <---- print partition to make sure
+quit
+
+8. Copy SD card to image file
+
+sudo dd if=/dev/disk2 of=/Users/kenneth/Downloads/orangepi.img bs=512 count=8429569
+
+8429569 is "End+1". +1 may not be necessary. Just in case block starts from 0.
