@@ -1,7 +1,5 @@
-# From image: Armbian_22.11.0-trunk_Orangepizero2_bullseye_legacy_4.9.255.img.gz
+# From image: Orangepizero2_3.0.6_ubuntu_jammy_server_linux5.16.17.7z
 
-# run armbian-config to change the hostname to orangepi
-#
 BASE_USER_PASSWORD=orange
 BASE_USER=pi
 password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
@@ -18,6 +16,7 @@ echo "${BASE_USER} ALL=NOPASSWD: /usr/sbin/service" > /etc/sudoers.d/octoprint-s
 # vi /etc/ssh/sshd_config
 # Change "PermitRootLogin yes" to "PermitRootLogin no"
 
+apt update
 apt-get -y --force-yes install python3 python3-virtualenv python3-dev git screen subversion cmake cmake-data avahi-daemon libavahi-compat-libdnssd1 libffi-dev libssl-dev libatlas3-base unzip
 echo " - Reinstall iputils-ping"
 apt-get install --reinstall iputils-ping
@@ -36,7 +35,7 @@ sudo -u "${BASE_USER}" mkdir /home/"${BASE_USER}"/.octoprint
 # scp ../filesystem/root/etc/systemd/system/octoprint.service to /etc/systemd/system/octoprint.service
 systemctl enable octoprint.service
 
-apt-get -y --force-yes install libjpeg62-turbo-dev
+apt-get -y --allow-downgrades --allow-remove-essential --allow-change-held-packages install libjpeg8-dev
 apt-get -y --force-yes --no-install-recommends install imagemagick ffmpeg libv4l-dev
 OCTOPI_MJPGSTREAMER_ARCHIVE=https://github.com/jacksonliam/mjpg-streamer/archive/master.zip
 wget $OCTOPI_MJPGSTREAMER_ARCHIVE -O mjpg-streamer.zip
@@ -111,6 +110,8 @@ systemctl enable armbian-resize-filesystem
 #### Run as pi user
 # scp ../filesystem/home/pi/.octoprint/config.yaml to /home/pi/.octoprint/config.yaml
 # scp ../filesystem/home/pi/webcamd.txt to /home/pi/webcamd.txt
+# Edit webcam.txt to for this line 'camera_usb_options="-r 640x480 -f 10 -d /dev/video1"'
 
 
-
+# run armbian-config to change the hostname to orangepi
+#
