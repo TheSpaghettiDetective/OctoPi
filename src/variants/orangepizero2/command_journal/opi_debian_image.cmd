@@ -1,4 +1,4 @@
-# From image: Orangepizero2_3.0.6_ubuntu_jammy_server_linux5.16.17.7z
+# From image: Orangepizero2_3.0.6_debian_bullseye_server_linux5.16.17.7z
 
 BASE_USER_PASSWORD=orange
 BASE_USER=pi
@@ -35,7 +35,7 @@ sudo -u "${BASE_USER}" mkdir /home/"${BASE_USER}"/.octoprint
 # scp ../filesystem/root/etc/systemd/system/octoprint.service to /etc/systemd/system/octoprint.service
 systemctl enable octoprint.service
 
-apt-get -y --allow-downgrades --allow-remove-essential --allow-change-held-packages install libjpeg8-dev
+apt-get -y --force-yes install libjpeg62-turbo-dev
 apt-get -y --force-yes --no-install-recommends install imagemagick ffmpeg libv4l-dev
 OCTOPI_MJPGSTREAMER_ARCHIVE=https://github.com/jacksonliam/mjpg-streamer/archive/master.zip
 wget $OCTOPI_MJPGSTREAMER_ARCHIVE -O mjpg-streamer.zip
