@@ -2,7 +2,7 @@
 
 # run armbian-config to change the hostname to orangepi
 #
-BASE_USER_PASSWORD=orange
+BASE_USER_PASSWORD=orangepi
 BASE_USER=pi
 password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
 useradd -m -p "${password}" -s /bin/bash "${BASE_USER}"
