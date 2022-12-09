@@ -101,17 +101,15 @@ systemctl enable gencert.service
 ### logrotatd
 # scp -r ../filesystem/root/etc/logrotate.d to /etc/
 
+### Janus
+apt-get -y --force-yes install janus
+systemctl disable janus
 
 ### Resize on initial boot
 systemctl enable orangepi-resize-filesystem
-
-### Run nmtui to change hostname to orangepi
 
 #### Run as pi user
 # scp ../filesystem/home/pi/.octoprint/config.yaml to /home/pi/.octoprint/config.yaml
 # scp ../filesystem/home/pi/webcamd.txt to /home/pi/webcamd.txt
 # Edit webcam.txt to for this line 'camera_usb_options="-r 640x480 -f 10 -d /dev/video1"'
 
-
-# run armbian-config to change the hostname to orangepi
-#
