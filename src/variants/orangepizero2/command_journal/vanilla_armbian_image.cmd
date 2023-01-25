@@ -1,4 +1,5 @@
 # From image: Armbian_22.11.0-trunk_Orangepizero2_bullseye_legacy_4.9.255.img.gz
+# For Opi 3 LTS, from image:  Armbian_22.11.1_Orangepi3-lts_bullseye_current_5.15.80.img.xz
 
 # run armbian-config to change the hostname to orangepi
 #
@@ -103,6 +104,9 @@ systemctl enable gencert.service
 ### logrotatd
 # scp -r ../filesystem/root/etc/logrotate.d to /etc/
 
+### Janus
+apt-get -y --force-yes install janus
+systemctl disable janus
 
 ### Resize on initial boot
 systemctl enable armbian-resize-filesystem
